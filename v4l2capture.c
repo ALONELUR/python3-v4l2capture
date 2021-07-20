@@ -9,7 +9,7 @@
 // purpose, without any conditions, unless such conditions are
 // required by law.
 
-#define USE_LIBV4L
+#undef USE_LIBV4L
 
 #include <Python.h>
 #include <fcntl.h>
@@ -673,7 +673,6 @@ static PyObject *Video_device_read_internal(Video_device *self, int queue)
       return NULL;
     }
 
-#ifdef USE_LIBV4L
 #if PY_MAJOR_VERSION < 3
   PyObject *result = PyString_FromStringAndSize(
 #else
@@ -685,50 +684,6 @@ static PyObject *Video_device_read_internal(Video_device *self, int queue)
     {
       return NULL;
     }
-#else
-  // Convert buffer from YUYV to RGB.
-  // For the byte order, see: http://v4l2spec.bytesex.org/spec/r4339.htm
-  // For the color conversion, see: http://v4l2spec.bytesex.org/spec/x2123.htm
-  int length = buffer.bytesused * 6 / 4;
-#if PY_MAJOR_VERSION < 3
-  PyObject *result = PyString_FromStringAndSize(NULL, length);
-#else
-  PyObject *result = PyBytes_FromStringAndSize(NULL, length);
-#endif
-
-  if(!result)
-    {
-      return NULL;
-    }
-
-  char *rgb = PyString_AS_STRING(result);
-  char *rgb_max = rgb + length;
-  unsigned char *yuyv = self->buffers[buffer.index].start;
-
-#define CLAMP(c) ((c) <= 0 ? 0 : (c) >= 65025 ? 255 : (c) >> 8)
-  while(rgb < rgb_max)
-    {
-      int u = yuyv[1] - 128;
-      int v = yuyv[3] - 128;
-      int uv = 100 * u + 208 * v;
-      u *= 516;
-      v *= 409;
-
-      int y = 298 * (yuyv[0] - 16);
-      rgb[0] = CLAMP(y + v);
-      rgb[1] = CLAMP(y - uv);
-      rgb[2] = CLAMP(y + u);
-
-      y = 298 * (yuyv[2] - 16);
-      rgb[3] = CLAMP(y + v);
-      rgb[4] = CLAMP(y - uv);
-      rgb[5] = CLAMP(y + u);
-
-      rgb += 6;
-      yuyv += 4;
-    }
-#undef CLAMP
-#endif
 
   if(queue && my_ioctl(self->fd, VIDIOC_QBUF, &buffer))
     {
